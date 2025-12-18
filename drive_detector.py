@@ -44,7 +44,7 @@ class DriveDetector:
         self._last_detected: List[DriveInfo] = []
 
     def get_external_drives(self) -> List[DriveInfo]:
-        """Get a list of all currently connected external drives."""
+        """Get a list of all currently connected removable drives."""
         drives = []
 
         for partition in psutil.disk_partitions(all=False):
@@ -52,9 +52,11 @@ class DriveDetector:
             if partition.mountpoint == "C:\\":
                 continue
 
-            # Check if it looks like an external drive
-            # We include removable drives and non-C: fixed drives
-            # (external SSDs often appear as fixed drives)
+            # Only include drives marked as removable (USB flash drives, SD cards)
+            # The 'opts' field contains 'removable' for these drives on Windows
+            if 'removable' not in partition.opts.lower():
+                continue
+
             try:
                 usage = psutil.disk_usage(partition.mountpoint)
 
