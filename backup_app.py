@@ -20,6 +20,7 @@ class BackupApp:
     STATE_NO_DRIVE = "no_drive"
     STATE_CONFIRM_DRIVE = "confirm_drive"
     STATE_READY = "ready"
+    STATE_PREPARING = "preparing"
     STATE_BACKING_UP = "backing_up"
 
     def __init__(self, test_mode: bool = False):
@@ -272,6 +273,46 @@ class BackupApp:
 
         self._add_test_mode_indicator(container)
 
+    def _show_preparing(self):
+        """Show the preparing/counting files screen."""
+        self.state = self.STATE_PREPARING
+        self._clear_main_frame()
+
+        # Center content
+        container = ttk.Frame(self.main_frame)
+        container.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+
+        # Icon
+        icon_label = ttk.Label(container, text="🔍", font=("Segoe UI Emoji", 48))
+        icon_label.pack(pady=(0, 20))
+
+        # Title
+        title = ttk.Label(
+            container,
+            text="Preparing backup...",
+            style="Title.TLabel"
+        )
+        title.pack()
+
+        # Indeterminate progress bar
+        self.prep_progress_bar = ttk.Progressbar(
+            container,
+            length=350,
+            mode='indeterminate'
+        )
+        self.prep_progress_bar.pack(pady=(20, 10))
+        self.prep_progress_bar.start(10)
+
+        # Status text
+        self.prep_status_label = ttk.Label(
+            container,
+            text="Calculating backup size...",
+            style="Status.TLabel"
+        )
+        self.prep_status_label.pack()
+
+        self._add_test_mode_indicator(container)
+
     def _show_backing_up(self):
         """Show the backup progress screen."""
         self.state = self.STATE_BACKING_UP
@@ -393,25 +434,69 @@ class BackupApp:
             messagebox.showerror("Error", "No backup drive connected!")
             return
 
-        self._show_backing_up()
+        self._show_preparing()
 
-        # Run backup in background thread
+        # Run preparation in background thread
         if self.test_mode:
             thread = threading.Thread(target=self._run_test_backup, daemon=True)
         else:
-            thread = threading.Thread(target=self._run_backup, daemon=True)
+            thread = threading.Thread(target=self._prepare_backup, daemon=True)
+        thread.start()
+
+    def _prepare_backup(self):
+        """Prepare backup by counting files and checking disk space."""
+        home_dir = Path.home()
+        self.backup_engine = BackupEngine(str(home_dir), self.current_drive.path)
+
+        # Count files
+        total_files, total_bytes = self.backup_engine._count_files()
+
+        # Check if drive has enough space (with 100MB buffer)
+        required_bytes = total_bytes + (100 * 1024 * 1024)
+        available_bytes = self.current_drive.free_gb * (1024 ** 3)
+
+        if required_bytes > available_bytes:
+            # Not enough space
+            required_gb = total_bytes / (1024 ** 3)
+            self.root.after(0, lambda: self._show_space_error(required_gb))
+            return
+
+        # Proceed with backup
+        self.root.after(0, lambda: self._start_actual_backup(total_files, total_bytes))
+
+    def _show_space_error(self, required_gb: float):
+        """Show error when drive doesn't have enough space."""
+        messagebox.showerror(
+            "Not Enough Space",
+            f"Your backup needs {required_gb:.1f} GB but the drive only has "
+            f"{self.current_drive.free_gb:.1f} GB free.\n\n"
+            "Please free up space on the backup drive or use a larger drive."
+        )
+        self._show_ready()
+
+    def _start_actual_backup(self, total_files: int, total_bytes: int):
+        """Start the actual backup after preparation is complete."""
+        self._show_backing_up()
+
+        # Store the counts so _run_backup can use them
+        self._prepared_total_files = total_files
+        self._prepared_total_bytes = total_bytes
+
+        thread = threading.Thread(target=self._run_backup, daemon=True)
         thread.start()
 
     def _run_backup(self):
         """Run the backup process (called in background thread)."""
-        home_dir = Path.home()
-        self.backup_engine = BackupEngine(str(home_dir), self.current_drive.path)
-
         def progress_callback(progress: BackupProgress):
             # Update UI from main thread
             self.root.after(0, lambda: self._update_progress(progress))
 
-        result = self.backup_engine.run(progress_callback)
+        # Use pre-counted values from preparation phase
+        result = self.backup_engine.run_with_counts(
+            self._prepared_total_files,
+            self._prepared_total_bytes,
+            progress_callback
+        )
 
         # Backup complete
         self.root.after(0, lambda: self._on_backup_complete(result))

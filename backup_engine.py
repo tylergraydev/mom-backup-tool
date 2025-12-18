@@ -162,21 +162,39 @@ class BackupEngine:
         Returns:
             Final BackupProgress with results
         """
+        # Count files first
+        total_files, total_bytes = self._count_files()
+        return self.run_with_counts(total_files, total_bytes, progress_callback)
+
+    def run_with_counts(
+        self,
+        total_files: int,
+        total_bytes: int,
+        progress_callback: Optional[Callable[[BackupProgress], None]] = None
+    ) -> BackupProgress:
+        """
+        Run the backup process with pre-counted file totals.
+
+        Args:
+            total_files: Pre-counted number of files
+            total_bytes: Pre-counted total bytes
+            progress_callback: Called periodically with BackupProgress updates
+
+        Returns:
+            Final BackupProgress with results
+        """
         self._cancelled = False
         self._progress = BackupProgress(
-            total_files=0,
+            total_files=total_files,
             copied_files=0,
-            total_bytes=0,
+            total_bytes=total_bytes,
             copied_bytes=0,
-            current_file="Counting files...",
+            current_file="Starting backup...",
             errors=[]
         )
 
         if progress_callback:
             progress_callback(self._progress)
-
-        # Count files first
-        self._progress.total_files, self._progress.total_bytes = self._count_files()
 
         if self._cancelled:
             return self._progress
