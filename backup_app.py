@@ -446,7 +446,18 @@ class BackupApp:
     def _prepare_backup(self):
         """Prepare backup by counting files and checking disk space."""
         home_dir = Path.home()
-        self.backup_engine = BackupEngine(str(home_dir), self.current_drive.path)
+        
+        # Define folders to backup (common user folders)
+        folders_to_backup = [
+            "Documents",
+            "Pictures", 
+            "Videos",
+            "Music",
+            "Downloads",
+            "Desktop"  # Common folder most users want backed up
+        ]
+        
+        self.backup_engine = BackupEngine(str(home_dir), self.current_drive.path, folders_to_backup)
 
         # Count files
         total_files, total_bytes = self.backup_engine._count_files()

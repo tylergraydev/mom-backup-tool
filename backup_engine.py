@@ -76,9 +76,10 @@ class BackupEngine:
         'AppData\\Local\\npm-cache',
     }
 
-    def __init__(self, source_dir: str, dest_drive: str):
+    def __init__(self, source_dir: str, dest_drive: str, folders_to_backup: list = None):
         self.source_dir = Path(source_dir)
         self.dest_drive = Path(dest_drive)
+        self.folders_to_backup = folders_to_backup  # If None, backup everything
         self._cancelled = False
         self._progress = BackupProgress(
             total_files=0,
@@ -116,12 +117,19 @@ class BackupEngine:
         """Count total files and bytes to copy. Returns (file_count, byte_count)."""
         total_files = 0
         total_bytes = 0
+        
+        # Determine which directories to walk
+        dirs_to_scan = self._get_directories_to_scan()
 
-        for root, dirs, files in os.walk(self.source_dir):
-            root_path = Path(root)
+        for scan_dir in dirs_to_scan:
+            if not scan_dir.exists():
+                continue
+                
+            for root, dirs, files in os.walk(scan_dir):
+                root_path = Path(root)
 
-            # Filter out excluded directories
-            dirs[:] = [d for d in dirs if not self._should_exclude(root_path / d)]
+                # Filter out excluded directories
+                dirs[:] = [d for d in dirs if not self._should_exclude(root_path / d)]
 
             for file in files:
                 if self._cancelled:
@@ -135,6 +143,15 @@ class BackupEngine:
                     pass
 
         return total_files, total_bytes
+    
+    def _get_directories_to_scan(self) -> list:
+        """Get list of directories to scan based on folders_to_backup."""
+        if self.folders_to_backup is None:
+            # If no specific folders specified, backup everything
+            return [self.source_dir]
+        
+        # Return paths for specific folders
+        return [self.source_dir / folder for folder in self.folders_to_backup]
 
     def _get_backup_folder_name(self) -> str:
         """Generate backup folder name with date and increment."""
@@ -202,16 +219,26 @@ class BackupEngine:
         # Create backup destination
         folder_name = self._get_backup_folder_name()
         dest_dir = self.dest_drive / "backups" / folder_name
+        
+        # Determine which directories to walk
+        dirs_to_scan = self._get_directories_to_scan()
 
         # Copy files
-        for root, dirs, files in os.walk(self.source_dir):
+        for scan_dir in dirs_to_scan:
             if self._cancelled:
                 break
+            
+            if not scan_dir.exists():
+                continue
+                
+            for root, dirs, files in os.walk(scan_dir):
+                if self._cancelled:
+                    break
 
-            root_path = Path(root)
+                root_path = Path(root)
 
-            # Filter out excluded directories
-            dirs[:] = [d for d in dirs if not self._should_exclude(root_path / d)]
+                # Filter out excluded directories
+                dirs[:] = [d for d in dirs if not self._should_exclude(root_path / d)]
 
             for file in files:
                 if self._cancelled:
