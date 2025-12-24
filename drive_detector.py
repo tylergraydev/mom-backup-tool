@@ -52,17 +52,23 @@ class DriveDetector:
             if partition.mountpoint == "C:\\":
                 continue
 
-            # Only include drives marked as removable (USB flash drives, SD cards)
-            # The 'opts' field contains 'removable' for these drives on Windows
-            if 'removable' not in partition.opts.lower():
-                continue
-
             try:
                 usage = psutil.disk_usage(partition.mountpoint)
 
                 # Get drive label from the path
                 drive_letter = partition.mountpoint.rstrip("\\")
                 label = self._get_drive_label(drive_letter)
+
+                # Check if this drive should be included:
+                # 1. Has 'removable' flag (USB flash drives, SD cards)
+                # 2. Hardcoded: Drive labeled "MomSSD"
+                # 3. Not C: and has a valid external filesystem type (catches external SSDs)
+                is_removable = 'removable' in partition.opts.lower()
+                is_momssd = label.upper() == "MOMSSD"
+                is_external_fs = partition.fstype in self.EXTERNAL_FSTYPES
+
+                if not (is_removable or is_momssd or is_external_fs):
+                    continue
 
                 drive_info = DriveInfo(
                     letter=drive_letter,
