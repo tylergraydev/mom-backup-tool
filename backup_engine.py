@@ -240,32 +240,32 @@ class BackupEngine:
                 # Filter out excluded directories
                 dirs[:] = [d for d in dirs if not self._should_exclude(root_path / d)]
 
-            for file in files:
-                if self._cancelled:
-                    break
+                for file in files:
+                    if self._cancelled:
+                        break
 
-                src_file = root_path / file
-                rel_path = src_file.relative_to(self.source_dir)
-                dest_file = dest_dir / rel_path
+                    src_file = root_path / file
+                    rel_path = src_file.relative_to(self.source_dir)
+                    dest_file = dest_dir / rel_path
 
-                self._progress.current_file = str(rel_path)
+                    self._progress.current_file = str(rel_path)
 
-                try:
-                    # Create destination directory if needed
-                    dest_file.parent.mkdir(parents=True, exist_ok=True)
+                    try:
+                        # Create destination directory if needed
+                        dest_file.parent.mkdir(parents=True, exist_ok=True)
 
-                    # Copy the file
-                    shutil.copy2(src_file, dest_file)
+                        # Copy the file
+                        shutil.copy2(src_file, dest_file)
 
-                    self._progress.copied_bytes += src_file.stat().st_size
-                    self._progress.copied_files += 1
+                        self._progress.copied_bytes += src_file.stat().st_size
+                        self._progress.copied_files += 1
 
-                except (OSError, PermissionError, shutil.Error) as e:
-                    # Log error but continue
-                    self._progress.errors.append(f"{rel_path}: {str(e)}")
+                    except (OSError, PermissionError, shutil.Error) as e:
+                        # Log error but continue
+                        self._progress.errors.append(f"{rel_path}: {str(e)}")
 
-                if progress_callback:
-                    progress_callback(self._progress)
+                    if progress_callback:
+                        progress_callback(self._progress)
 
         self._progress.current_file = "Complete!"
         if progress_callback:
