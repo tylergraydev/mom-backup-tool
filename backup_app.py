@@ -445,7 +445,8 @@ class BackupApp:
 
     def _prepare_backup(self):
         """Prepare backup by counting files and checking disk space."""
-        home_dir = Path.home()
+        # Hardcoded to backup grayt user
+        home_dir = Path("C:/Users/grayt")
         
         # Define folders to backup (common user folders)
         folders_to_backup = [
